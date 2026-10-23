@@ -8,6 +8,13 @@ spring:
     url: ${CENTRAL_DB_URL:jdbc:postgresql://localhost:5432/fuel_central}
     username: ${CENTRAL_DB_USER:postgres}
     password: ${CENTRAL_DB_PASSWORD:}
+    hikari:
+      # One pool serves the sites' pushes and pulls, the web app and the master-data drain. Pushes are short, so this is generous;
+      # keep it below Postgres max_connections (default 100) minus what other tools use. A request waits up to connection-timeout
+      # for a free connection and then fails with a clear error instead of hanging.
+      maximum-pool-size: ${CENTRAL_DB_POOL_SIZE:25}
+      minimum-idle: 5
+      connection-timeout: ${CENTRAL_DB_CONNECT_TIMEOUT_MS:10000}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:

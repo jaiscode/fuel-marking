@@ -29,6 +29,7 @@ Flyway creates the schema on first start. `GET /actuator/health` is the readines
 | Variable | Default | Meaning |
 |---|---|---|
 | `CENTRAL_DB_URL` / `_USER` / `_PASSWORD` | local | Central PostgreSQL |
+| `CENTRAL_DB_POOL_SIZE` / `CENTRAL_DB_CONNECT_TIMEOUT_MS` | 25 / 10000 | Connections the backend may hold open, and how long a request waits for one before failing. One pool serves site syncs, the web app and the master-data drain; keep it below Postgres `max_connections`. Watch Hikari's pending-connections metric if many sites sync. |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka the backend publishes master data to |
 | `OIDC_*` | see [oidc-setup.md](oidc-setup.md) | Sign-in for the web app. `OIDC_ISSUER_URI` is required |
 | `fuelmarking.master-data-topic` | `fuelmarking.master-data` | Compacted, single-partition topic (created automatically) |

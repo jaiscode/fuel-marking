@@ -52,7 +52,26 @@ public class SyncAgent implements AutoCloseable {
             t.setDaemon(true);
             return t;
         });
-        scheduler.scheduleWithFixedDelay(this::syncOnce, 2, intervalSeconds, TimeUnit.SECONDS);
+        schedule(intervalSeconds, 2 + java.util.concurrent.ThreadLocalRandom.current().nextLong(Math.max(1, intervalSeconds)));
+    }
+
+    /**
+     * Runs a cycle after delaySeconds, then schedules the next one at the interval give or take 20%. Sites that all start together (after a
+     * central restart, say) drift apart instead of hitting the central system in the same second every time.
+     */
+    private void schedule(int intervalSeconds, long delaySeconds) {
+        scheduler.schedule(() -> {
+            try { syncOnce(); }
+            finally {
+                if (!scheduler.isShutdown()) schedule(intervalSeconds, jittered(intervalSeconds));
+            }
+        }, delaySeconds, TimeUnit.SECONDS);
+    }
+
+    /** The interval varied by up to 20% either way (at least 1 second). */
+    static long jittered(int intervalSeconds) {
+        double factor = 0.8 + 0.4 * java.util.concurrent.ThreadLocalRandom.current().nextDouble();
+        return Math.max(1, Math.round(intervalSeconds * factor));
     }
 
     /** One push + pull cycle. Never throws. Returns false if the central system could not be reached. */

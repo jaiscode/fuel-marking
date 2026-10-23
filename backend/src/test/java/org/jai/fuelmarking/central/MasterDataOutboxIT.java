@@ -375,4 +375,19 @@ class MasterDataOutboxIT {
         assertEquals(403, rest.exchange("/api/admin/master-data/status", HttpMethod.GET, new HttpEntity<>(viewer), String.class).getStatusCode().value());
         assertEquals(401, rest.exchange("/api/admin/master-data/status", HttpMethod.GET, new HttpEntity<>(new HttpHeaders()), String.class).getStatusCode().value());
     }
+
+    @Test
+    void locationsAreMasterDataLikeTheRest() throws Exception {
+        String n = String.valueOf(System.nanoTime() % 1_000_000);
+        post("/api/admin/locations", Map.of("code", "", "name", "No code " + n), 400);
+        JsonNode created = post("/api/admin/locations", Map.of("code", "kb" + n, "name", "Kisumu border " + n), 201);
+        UUID id = UUID.fromString(created.get("id").asText());
+        assertEquals("KB" + n, jdbc.queryForObject("SELECT code FROM locations WHERE id = ?", String.class, id), "codes are stored upper case");
+        JsonNode msg = mapper.readTree(jdbc.queryForObject("SELECT payload FROM master_data_outbox WHERE msg_key = ? ORDER BY id DESC LIMIT 1", String.class, "LOCATION:" + id)).get("payload");
+        assertEquals("Kisumu border " + n, msg.get("name").asText(), "the sites are told");
+        rest.exchange("/api/admin/locations/" + id, HttpMethod.PUT, new HttpEntity<>(Map.of("code", "KB" + n, "name", "Kisumu border " + n, "active", false), admin()), String.class);
+        assertFalse(jdbc.queryForObject("SELECT active FROM locations WHERE id = ?", Boolean.class, id));
+        assertTrue(jdbc.queryForObject("SELECT count(*) FROM master_data_outbox WHERE msg_key = ?", Integer.class, "LOCATION:" + id) >= 2, "a retirement is sent too");
+        awaitDrained();
+    }
 }

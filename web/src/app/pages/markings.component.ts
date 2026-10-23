@@ -20,6 +20,8 @@ import { fmt0, fmt1 } from '../shared/format';
       <div class="field"><label for="q">Search</label><input id="q" placeholder="Order or truck no." [(ngModel)]="f.q" (keyup.enter)="apply()" /></div>
       <div class="field"><label for="s">Site</label><select id="s" [(ngModel)]="f.siteId" (ngModelChange)="apply()">
         <option value="">All</option>@for (s of lookups.sites(); track s.id) { <option [value]="s.id">{{ s.name }}</option> }</select></div>
+      <div class="field"><label for="lc">Location</label><select id="lc" [(ngModel)]="f.locationId" (ngModelChange)="apply()">
+        <option value="">All</option>@for (l of lookups.locations(); track l.id) { <option [value]="l.id">{{ l.name }}</option> }</select></div>
       <div class="field"><label for="o">Oil company</label><select id="o" [(ngModel)]="f.omcId" (ngModelChange)="apply()">
         <option value="">All</option>@for (o of lookups.omcs(); track o.id) { <option [value]="o.id">{{ o.name }}</option> }</select></div>
       <div class="field"><label for="fu">Fuel</label><select id="fu" [(ngModel)]="f.fuel" (ngModelChange)="apply()">
@@ -33,19 +35,19 @@ import { fmt0, fmt1 } from '../shared/format';
 
     <div class="card" style="padding:0">
       <div class="table-wrap"><table>
-        <thead><tr><th>Registered</th><th>Order</th><th>Truck</th><th>Trailer / wagon</th><th>Site</th><th>Oil company</th><th>Fuel</th>
+        <thead><tr><th>Registered</th><th>Order</th><th>Truck</th><th>Trailer / wagon</th><th>Site</th><th>Location</th><th>Oil company</th><th>Fuel</th>
           <th class="num">Volume (L)</th><th class="num">Rum (g)</th><th>Status</th></tr></thead>
         <tbody>
           @for (m of data()?.items ?? []; track m.id) {
             <tr>
               <td>{{ time(m.registeredAt) }}</td>
               <td><a [routerLink]="['/markings', m.id]" class="mono">{{ m.orderNumber }}</a></td>
-              <td>{{ m.truckNumber }}</td><td>{{ m.trailerNumber || '–' }}</td><td>{{ m.siteName }}</td><td>{{ m.omc }}</td><td>{{ m.fuelType }}</td>
+              <td>{{ m.truckNumber }}</td><td>{{ m.trailerNumber || '–' }}</td><td>{{ m.siteName }}</td><td>{{ m.location || '–' }}</td><td>{{ m.omc }}</td><td>{{ m.fuelType }}</td>
               <td class="num">{{ fmt0(m.declaredVolumeL) }}</td><td class="num">{{ fmt1(m.rumMl) }}</td>
               <td><app-status-badge [value]="m.status" /></td>
             </tr>
           } @empty {
-            <tr><td colspan="10" class="empty">{{ loading() ? 'Loading…' : 'No markings match these filters.' }}</td></tr>
+            <tr><td colspan="11" class="empty">{{ loading() ? 'Loading…' : 'No markings match these filters.' }}</td></tr>
           }
         </tbody></table></div>
     </div>
@@ -65,7 +67,7 @@ export class MarkingsComponent implements OnInit {
   loading = signal(false);
   private page = 0;
 
-  private blank() { return { q: '', siteId: '', omcId: '', fuel: '', status: '', from: daysAgo(29), to: '' }; }
+  private blank() { return { q: '', siteId: '', locationId: '', omcId: '', fuel: '', status: '', from: daysAgo(29), to: '' }; }
 
   ngOnInit(): void { this.lookups.ensureLoaded(); this.load(); }
   apply(): void { this.page = 0; this.load(); }

@@ -7,13 +7,13 @@ import java.util.*;
 
 public class ShiftDao {
     private static final String COLS =
-            "id, site_id, supervisor_id, started_at, ended_at, status, opening_rum_ml, closing_rum_ml, reconciliation_variance_ml";
+            "id, site_id, supervisor_id, started_at, ended_at, status, opening_rum_ml, closing_rum_ml, reconciliation_variance_ml, location_id, location_name";
 
     private Shift map(ResultSet rs) throws SQLException {
         Timestamp end = rs.getTimestamp(5);
         return new Shift(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getObject(3, UUID.class),
                 rs.getTimestamp(4).toLocalDateTime(), end == null ? null : end.toLocalDateTime(), rs.getString(6),
-                rs.getDouble(7), nullableDouble(rs, 8), nullableDouble(rs, 9));
+                rs.getDouble(7), nullableDouble(rs, 8), nullableDouble(rs, 9), rs.getObject(10, UUID.class), rs.getString(11));
     }
 
     private static Double nullableDouble(ResultSet rs, int col) throws SQLException {
@@ -29,11 +29,12 @@ public class ShiftDao {
         }
     }
 
-    public Shift insert(Connection c, UUID siteId, UUID supervisorId, double openingRumMl) throws SQLException {
+    public Shift insert(Connection c, UUID siteId, UUID supervisorId, double openingRumMl, UUID locationId, String locationName) throws SQLException {
         UUID id = UUID.randomUUID();
         try (PreparedStatement ps = c.prepareStatement(
-                "INSERT INTO shifts(id, site_id, supervisor_id, opening_rum_ml) VALUES (?,?,?,?)")) {
+                "INSERT INTO shifts(id, site_id, supervisor_id, opening_rum_ml, location_id, location_name) VALUES (?,?,?,?,?,?)")) {
             ps.setObject(1, id); ps.setObject(2, siteId); ps.setObject(3, supervisorId); ps.setDouble(4, openingRumMl);
+            ps.setObject(5, locationId); ps.setString(6, locationName);
             ps.executeUpdate();
         }
         return publish(c, id);

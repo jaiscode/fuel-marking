@@ -11,13 +11,13 @@ export interface Overview {
 
 export interface SiteStatus {
   id: string; code: string; name: string; siteType: string; active: boolean;
-  lastSyncAt: string | null; lastSyncAgeSeconds: number | null; shiftOpen: boolean; trucksToday: number;
+  lastSyncAt: string | null; lastSyncAgeSeconds: number | null; shiftOpen: boolean; trucksToday: number; location: string | null;
 }
 
 export interface MarkingRow {
   id: string; siteId: string; siteName: string; orderNumber: string; truckNumber: string; trailerNumber: string | null; omc: string;
   fuelType: string; declaredVolumeL: number; rumMl: number; status: string; rumType: string | null;
-  registeredAt: string; completedAt: string | null;
+  registeredAt: string; completedAt: string | null; location: string | null;
 }
 /** fuelType / rumType are empty on markings from before a compartment carried its own fuel. */
 export interface Compartment { number: string; capacity: number; volume: number; fuelType: string | null; rumType: string | null; }
@@ -46,7 +46,7 @@ export interface IncidentRow {
 
 export interface ShiftRow {
   id: string; siteId: string; siteName: string; supervisor: string; startedAt: string; endedAt: string | null;
-  status: string; openingMl: number; closingMl: number | null; varianceMl: number | null;
+  status: string; openingMl: number; closingMl: number | null; varianceMl: number | null; location: string | null;
 }
 
 export interface TransferRow {
@@ -83,7 +83,7 @@ export interface AuthConfig { issuer: string; clientId: string; scope: string; a
 /** Names for filter drop-downs (GET /api/web/lookups); open to anyone who can read reports. */
 /** rumTypeId / rumTypeCode are set on fuel types: the one rum type the fuel is marked with. */
 export interface Lookup { id: string; code: string; name: string; active: boolean; color?: string | null; rumTypeId?: string | null; rumTypeCode?: string | null; }
-export interface Lookups { sites: Lookup[]; omcs: Lookup[]; fuelTypes: Lookup[]; rumTypes: Lookup[]; containerTypes: Lookup[]; }
+export interface Lookups { sites: Lookup[]; omcs: Lookup[]; fuelTypes: Lookup[]; rumTypes: Lookup[]; containerTypes: Lookup[]; locations: Lookup[]; }
 
 /** Fuel types and rum types are master data with the same shape. */
 export type CodeName = Lookup;

@@ -18,8 +18,17 @@ public final class Records {
         @Override public String toString() { return fullName; }
     }
 
+    /** A place a mobile marking site can work (master data kept at head office). */
+    public record Location(UUID id, String code, String name) { @Override public String toString() { return name; } }
+
+    /** locationId / locationName: where the shift was done - always set at a mobile site, optional at a fixed one. */
     public record Shift(UUID id, UUID siteId, UUID supervisorId, LocalDateTime startedAt, LocalDateTime endedAt,
-                        String status, double openingRumMl, Double closingRumMl, Double varianceMl) {}
+                        String status, double openingRumMl, Double closingRumMl, Double varianceMl, UUID locationId, String locationName) {
+        public Shift(UUID id, UUID siteId, UUID supervisorId, LocalDateTime startedAt, LocalDateTime endedAt,
+                     String status, double openingRumMl, Double closingRumMl, Double varianceMl) {
+            this(id, siteId, supervisorId, startedAt, endedAt, status, openingRumMl, closingRumMl, varianceMl, null, null);
+        }
+    }
 
     /**
      * A container type from the master data (maintained in the web app): bulk (IBC, drum ...) or jerrican (plastic, metal ...),

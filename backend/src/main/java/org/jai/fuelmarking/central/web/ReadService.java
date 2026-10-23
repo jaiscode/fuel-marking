@@ -82,7 +82,8 @@ public class ReadService {
                 jdbc.getJdbcTemplate().query("SELECT id, code, name, active FROM fuel_types ORDER BY name", m),
                 jdbc.getJdbcTemplate().query("SELECT id, code, name, active, color FROM rum_types ORDER BY name",
                         (rs, n) -> new Lookup(rs.getObject("id", UUID.class), rs.getString("code"), rs.getString("name"), rs.getBoolean("active"), rs.getString("color"))),
-                jdbc.getJdbcTemplate().query("SELECT id, code, name, active FROM container_types ORDER BY category, name", m));
+                jdbc.getJdbcTemplate().query("SELECT id, code, name, active FROM container_types ORDER BY category, name", m),
+                jdbc.getJdbcTemplate().query("SELECT id, code, name, active FROM locations ORDER BY name", m));
     }
 
     // ---------------------------------------------------------------- overview
@@ -126,10 +127,11 @@ public class ReadService {
                        (SELECT max(e.received_at) FROM synced_entities e WHERE e.source_site_id = s.id) AS last_sync,
                        EXTRACT(EPOCH FROM (now() - (SELECT max(e.received_at) FROM synced_entities e WHERE e.source_site_id = s.id)))::bigint AS last_sync_age,
                        EXISTS (SELECT 1 FROM v_shifts sh WHERE sh.site_id = s.id AND sh.status = 'OPEN') AS shift_open,
-                       (SELECT count(*) FROM v_truck_markings m WHERE m.site_id = s.id AND m.status <> 'DELETED' AND m.registered_at >= current_date) AS trucks_today
+                       (SELECT count(*) FROM v_truck_markings m WHERE m.site_id = s.id AND m.status <> 'DELETED' AND m.registered_at >= current_date) AS trucks_today,
+                       (SELECT sh.location_name FROM v_shifts sh WHERE sh.site_id = s.id AND sh.location_name IS NOT NULL ORDER BY sh.started_at DESC LIMIT 1) AS location
                 FROM marking_sites s ORDER BY s.name""", (rs, n) -> new SiteStatus(rs.getObject("id", UUID.class),
                 rs.getString("code"), rs.getString("name"), rs.getString("site_type"), rs.getBoolean("active"),
-                ts(rs, "last_sync"), age(rs), rs.getBoolean("shift_open"), rs.getLong("trucks_today")));
+                ts(rs, "last_sync"), age(rs), rs.getBoolean("shift_open"), rs.getLong("trucks_today"), rs.getString("location")));
     }
 
     // ---------------------------------------------------------------- markings
@@ -138,14 +140,14 @@ public class ReadService {
             rs.getObject("site_id", UUID.class), rs.getString("site_name"), rs.getString("order_number"),
             rs.getString("truck_number"), rs.getString("trailer_number"), rs.getString("omc_name"), rs.getString("fuel_type"),
             rs.getDouble("declared_volume_l"), rs.getDouble("rum_ml"), rs.getString("status"), rs.getString("rum_type"),
-            ts(rs, "registered_at"), ts(rs, "completed_at"));
+            ts(rs, "registered_at"), ts(rs, "completed_at"), rs.getString("location"));
 
-    private static final String MARKING_FROM = " FROM v_truck_markings m LEFT JOIN marking_sites s ON s.id = m.site_id";
+    private static final String MARKING_FROM = " FROM v_truck_markings m LEFT JOIN marking_sites s ON s.id = m.site_id LEFT JOIN v_shifts sh ON sh.id = m.shift_id";
     private static final String MARKING_COLS = "SELECT m.id, m.site_id, s.name AS site_name, m.order_number, m.truck_number, m.trailer_number, m.omc_name, " +
-            "m.fuel_type, m.declared_volume_l, m.rum_ml, m.status, m.rum_type, m.registered_at, m.completed_at";
+            "m.fuel_type, m.declared_volume_l, m.rum_ml, m.status, m.rum_type, m.registered_at, m.completed_at, sh.location_name AS location";
 
-    public Page<MarkingRow> markings(UUID siteId, UUID omcId, String fuel, String status, String q, LocalDate from, LocalDate to, int page, int size) {
-        Filter f = new Filter().eq("m.site_id", "site", siteId).eq("m.omc_id", "omc", omcId)
+    public Page<MarkingRow> markings(UUID siteId, UUID omcId, UUID locationId, String fuel, String status, String q, LocalDate from, LocalDate to, int page, int size) {
+        Filter f = new Filter().eq("m.site_id", "site", siteId).eq("m.omc_id", "omc", omcId).eq("sh.location_id", "location", locationId)
                 .eq("m.status", "status", status).search("q", q, "m.order_number", "m.truck_number", "m.trailer_number").range("m.registered_at", from, to);
         if (!"DELETED".equals(status)) f.clauses.add("m.status <> 'DELETED'");      // deleted markings are only listed when asked for
         if (fuel != null && !fuel.isBlank()) {          // a truck matches when any of its compartments carries the fuel
@@ -255,18 +257,18 @@ public class ReadService {
                         rs.getString("reporter"), ts(rs, "occurred_at"), rs.getString("rum_type"))), total, pg, sz);
     }
 
-    public Page<ShiftRow> shifts(UUID siteId, String status, LocalDate from, LocalDate to, int page, int size) {
-        Filter f = new Filter().eq("h.site_id", "site", siteId).eq("h.status", "status", status).range("h.started_at", from, to);
+    public Page<ShiftRow> shifts(UUID siteId, UUID locationId, String status, LocalDate from, LocalDate to, int page, int size) {
+        Filter f = new Filter().eq("h.site_id", "site", siteId).eq("h.location_id", "location", locationId).eq("h.status", "status", status).range("h.started_at", from, to);
         int sz = size(size), pg = Math.max(0, page);
         String join = " FROM v_shifts h LEFT JOIN marking_sites s ON s.id = h.site_id LEFT JOIN app_users u ON u.id = h.supervisor_id";
         long total = jdbc.queryForObject("SELECT count(*)" + join + f.where(), f.params, Long.class);
         f.params.addValue("limit", sz).addValue("offset", (long) pg * sz);
         return new Page<>(jdbc.query("SELECT h.id, h.site_id, s.name AS site_name, COALESCE(u.full_name, h.supervisor_id::text) AS supervisor, " +
-                "h.started_at, h.ended_at, h.status, h.opening_ml, h.closing_ml, h.variance_ml" + join + f.where() +
+                "h.started_at, h.ended_at, h.status, h.opening_ml, h.closing_ml, h.variance_ml, h.location_name" + join + f.where() +
                 " ORDER BY h.started_at DESC LIMIT :limit OFFSET :offset", f.params,
                 (rs, n) -> new ShiftRow(rs.getObject("id", UUID.class), rs.getObject("site_id", UUID.class), rs.getString("site_name"),
                         rs.getString("supervisor"), ts(rs, "started_at"), ts(rs, "ended_at"), rs.getString("status"),
-                        rs.getDouble("opening_ml"), nullableDouble(rs, "closing_ml"), nullableDouble(rs, "variance_ml"))), total, pg, sz);
+                        rs.getDouble("opening_ml"), nullableDouble(rs, "closing_ml"), nullableDouble(rs, "variance_ml"), rs.getString("location_name"))), total, pg, sz);
     }
 
     // ---------------------------------------------------------------- transfers

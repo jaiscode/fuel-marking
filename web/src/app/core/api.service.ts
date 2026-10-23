@@ -54,6 +54,10 @@ export class ApiService {
   saveOmc(o: Partial<Omc>): Observable<Omc> {
     return o.id ? this.http.put<Omc>(`/api/admin/omcs/${o.id}`, o) : this.http.post<Omc>('/api/admin/omcs', o);
   }
+  locations(): Observable<CodeName[]> { return this.http.get<CodeName[]>('/api/admin/locations'); }
+  saveLocation(l: Partial<CodeName>): Observable<CodeName> {
+    return l.id ? this.http.put<CodeName>(`/api/admin/locations/${l.id}`, l) : this.http.post<CodeName>('/api/admin/locations', l);
+  }
   fuelTypes(): Observable<CodeName[]> { return this.http.get<CodeName[]>('/api/admin/fuel-types'); }
   saveFuelType(f: Partial<CodeName>): Observable<CodeName> {
     return f.id ? this.http.put<CodeName>(`/api/admin/fuel-types/${f.id}`, f) : this.http.post<CodeName>('/api/admin/fuel-types', f);

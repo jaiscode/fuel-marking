@@ -39,7 +39,7 @@ class ReadApiIT {
     }
     static UUID siteId, otherId, signerId;
     static String siteKey, otherKey;
-    static String marking1, marking2, shiftId, transferId, signatureId;
+    static String locationId, marking1, marking2, shiftId, transferId, signatureId;
     static long outbox = 100;
 
     @org.springframework.test.context.DynamicPropertySource
@@ -101,6 +101,8 @@ class ReadApiIT {
         shiftId = UUID.randomUUID().toString();
         ObjectNode shift = fixture("SHIFT");
         shift.put("id", shiftId).put("siteId", siteId.toString()).put("supervisorId", signerId.toString()).put("startedAt", ago(60).toString());
+        locationId = UUID.randomUUID().toString();
+        shift.put("locationId", locationId).put("locationName", "Border post " + N);
         shift.put("status", "OPEN").putNull("endedAt").putNull("closingRumMl").putNull("varianceMl");
 
         marking1 = UUID.randomUUID().toString();
@@ -497,5 +499,23 @@ class ReadApiIT {
         JsonNode old = get("/api/web/markings/" + marking1);
         assertEquals(0, old.get("doses").size());
         assertTrue(old.get("compartments").get(0).get("fuelType").isNull());
+    }
+
+    @Test @Order(14)
+    void headOfficeSeesWhereAShiftAndItsMarkingsHappened() {
+        JsonNode sh = get("/api/web/shifts?siteId=" + siteId + "&locationId=" + locationId);
+        assertEquals(1, sh.get("total").asInt());
+        assertEquals("Border post " + N, sh.get("items").get(0).get("location").asText());
+        assertEquals(0, get("/api/web/shifts?siteId=" + siteId + "&locationId=" + UUID.randomUUID()).get("total").asInt());
+
+        JsonNode mk = get("/api/web/markings?siteId=" + siteId + "&locationId=" + locationId);
+        assertTrue(mk.get("total").asInt() >= 2, "the trucks marked during the shift are at that location");
+        assertEquals("Border post " + N, mk.get("items").get(0).get("location").asText());
+        assertEquals("Border post " + N, get("/api/web/markings/" + marking1).get("marking").get("location").asText());
+        assertEquals(0, get("/api/web/markings?siteId=" + siteId + "&locationId=" + UUID.randomUUID()).get("total").asInt());
+
+        boolean found = false;
+        for (JsonNode s : get("/api/web/sites/status")) if (s.get("id").asText().equals(siteId.toString())) { found = true; assertEquals("Border post " + N, s.get("location").asText()); }
+        assertTrue(found, "the sites overview says where the site last worked");
     }
 }

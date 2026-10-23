@@ -72,6 +72,6 @@ export class ShellComponent {
   ];
   readonly admin = [
     { path: '/admin/sites', label: 'Sites' }, { path: '/admin/omcs', label: 'Oil companies' }, { path: '/admin/fuel-types', label: 'Fuel types' },
-    { path: '/admin/container-types', label: 'Container types' }, { path: '/admin/rum-types', label: 'Rum types' }, { path: '/admin/jerricans', label: 'Jerricans' }, { path: '/admin/users', label: 'Users' }
+    { path: '/admin/container-types', label: 'Container types' }, { path: '/admin/rum-types', label: 'Rum types' }, { path: '/admin/locations', label: 'Locations' }, { path: '/admin/jerricans', label: 'Jerricans' }, { path: '/admin/users', label: 'Users' }
   ];
 }

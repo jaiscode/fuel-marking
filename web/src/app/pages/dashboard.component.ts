@@ -69,12 +69,13 @@ type Preset = 'today' | '7d' | '30d';
       <h2>Site synchronisation</h2>
       <p class="muted" style="margin-top:-6px">A site that has not synced for over an hour may be offline.</p>
       <div class="table-wrap"><table>
-        <thead><tr><th>Site</th><th>Type</th><th>Last sync</th><th>Shift</th><th class="num">Trucks today</th></tr></thead>
+        <thead><tr><th>Site</th><th>Type</th><th>Last worked at</th><th>Last sync</th><th>Shift</th><th class="num">Trucks today</th></tr></thead>
         <tbody>
           @for (s of sites(); track s.id) {
             <tr>
               <td>{{ s.name }} <span class="muted mono">{{ s.code }}</span>@if (!s.active) { <span class="badge">inactive</span> }</td>
               <td>{{ s.siteType.toLowerCase() }}</td>
+              <td>{{ s.location || '–' }}</td>
               <td><span class="badge" [class]="syncTone(s)">{{ age(s) }}</span></td>
               <td>@if (s.shiftOpen) { <span class="badge info">open</span> } @else { <span class="muted">–</span> }</td>
               <td class="num">{{ fmt0(s.trucksToday) }}</td>

@@ -26,6 +26,7 @@ public class MasterDataApplier {
             case "OMC" -> omc(c, p);
             case "FUEL_TYPE" -> fuelType(c, p);
             case "RUM_TYPE" -> rumType(c, p);
+            case "LOCATION" -> location(c, p);
             case "CONTAINER_TYPE" -> containerType(c, p);
             case "JERRICAN" -> jerrican(c, p);
             case "USER" -> user(c, p);
@@ -63,6 +64,16 @@ public class MasterDataApplier {
             ps.setObject(1, uuid(p, "id")); ps.setString(2, text(p, "code")); ps.setString(3, text(p, "name"));
             ps.setString(4, rum);
             ps.setBoolean(5, p.path("active").asBoolean(true));
+            ps.executeUpdate();
+        }
+    }
+
+    private void location(Connection c, JsonNode p) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement("""
+                INSERT INTO locations(id, code, name, active) VALUES (?,?,?,?)
+                ON CONFLICT (id) DO UPDATE SET code=EXCLUDED.code, name=EXCLUDED.name, active=EXCLUDED.active, updated_at=now()""")) {
+            ps.setObject(1, uuid(p, "id")); ps.setString(2, text(p, "code")); ps.setString(3, text(p, "name"));
+            ps.setBoolean(4, p.path("active").asBoolean(true));
             ps.executeUpdate();
         }
     }

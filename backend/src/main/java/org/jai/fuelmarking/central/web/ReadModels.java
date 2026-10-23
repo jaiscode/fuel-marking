@@ -18,11 +18,11 @@ public final class ReadModels {
 
     public record SiteStatus(UUID id, String code, String name, String siteType, boolean active,
                              LocalDateTime lastSyncAt, Long lastSyncAgeSeconds, boolean shiftOpen,
-                             long trucksToday) {}
+                             long trucksToday, String location) {}
 
     public record MarkingRow(UUID id, UUID siteId, String siteName, String orderNumber, String truckNumber, String trailerNumber, String omc,
                              String fuelType, double declaredVolumeL, double rumMl, String status, String rumType,
-                             LocalDateTime registeredAt, LocalDateTime completedAt) {}
+                             LocalDateTime registeredAt, LocalDateTime completedAt, String location) {}
 
     /** fuelType / rumType are empty on markings from before a compartment carried its own fuel. */
     public record Compartment(String number, double capacity, double volume, String fuelType, String rumType) {}
@@ -48,7 +48,7 @@ public final class ReadModels {
                               String container, String reportedBy, LocalDateTime occurredAt, String rumType) {}
 
     public record ShiftRow(UUID id, UUID siteId, String siteName, String supervisor, LocalDateTime startedAt,
-                           LocalDateTime endedAt, String status, double openingMl, Double closingMl, Double varianceMl) {}
+                           LocalDateTime endedAt, String status, double openingMl, Double closingMl, Double varianceMl, String location) {}
 
     public record TransferRow(UUID id, String fromSite, String toSite, String status, LocalDateTime dispatchedAt,
                               long items, long received, String kind) {}
@@ -68,7 +68,7 @@ public final class ReadModels {
     public record TransferDetail(TransferRow transfer, List<TransferItem> items) {}
 
     /** Names for filter drop-downs; readable by anyone who may read reports. */
-    public record Lookups(List<Lookup> sites, List<Lookup> omcs, List<Lookup> fuelTypes, List<Lookup> rumTypes, List<Lookup> containerTypes) {}
+    public record Lookups(List<Lookup> sites, List<Lookup> omcs, List<Lookup> fuelTypes, List<Lookup> rumTypes, List<Lookup> containerTypes, List<Lookup> locations) {}
 
     /** color is only set for rum types. */
     public record Lookup(UUID id, String code, String name, boolean active, String color) {}

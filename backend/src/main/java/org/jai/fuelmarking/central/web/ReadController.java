@@ -40,12 +40,13 @@ public class ReadController {
 
     @GetMapping("/markings")
     Page<MarkingRow> markings(@RequestParam(required = false) UUID siteId, @RequestParam(required = false) UUID omcId,
+                              @RequestParam(required = false) UUID locationId,
                               @RequestParam(required = false) String fuel, @RequestParam(required = false) String status,
                               @RequestParam(required = false) String q,
                               @RequestParam(required = false) @DateTimeFormat(pattern = ISO) LocalDate from,
                               @RequestParam(required = false) @DateTimeFormat(pattern = ISO) LocalDate to,
                               @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "25") int size) {
-        return service.markings(siteId, omcId, fuel, status, q, from, to, page, size);
+        return service.markings(siteId, omcId, locationId, fuel, status, q, from, to, page, size);
     }
 
     @GetMapping("/markings/summary")
@@ -79,11 +80,12 @@ public class ReadController {
     }
 
     @GetMapping("/shifts")
-    Page<ShiftRow> shifts(@RequestParam(required = false) UUID siteId, @RequestParam(required = false) String status,
+    Page<ShiftRow> shifts(@RequestParam(required = false) UUID siteId, @RequestParam(required = false) UUID locationId,
+                          @RequestParam(required = false) String status,
                           @RequestParam(required = false) @DateTimeFormat(pattern = ISO) LocalDate from,
                           @RequestParam(required = false) @DateTimeFormat(pattern = ISO) LocalDate to,
                           @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "25") int size) {
-        return service.shifts(siteId, status, from, to, page, size);
+        return service.shifts(siteId, locationId, status, from, to, page, size);
     }
 
     @GetMapping("/stock-counts")

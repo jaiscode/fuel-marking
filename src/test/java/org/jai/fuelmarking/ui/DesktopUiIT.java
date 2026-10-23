@@ -912,8 +912,9 @@ class DesktopUiIT {
         Tx.run(c -> { new org.jai.fuelmarking.dao.MasterDataDao().upsertSite(c, new Site(siteA.id(), siteA.code(), siteA.name(), "WAREHOUSE")); return null; });
         Node bTransfers = open(tabsOf(bMain), "Transfer jerrican");
         @SuppressWarnings("unchecked") ComboBox<Site> returnTo = fx(() -> all(bTransfers, ComboBox.class).get(0));
-        assertEquals(List.of(siteA.id()), fx(() -> returnTo.getItems().stream().map(Site::id).toList()), "only a warehouse can take empties back");
-        fx(() -> returnTo.getSelectionModel().select(0));
+        assertTrue(fx(() -> returnTo.getItems().stream().map(Site::id).toList()).contains(siteA.id()), "a warehouse can take empties back");
+        assertTrue(fx(() -> returnTo.getItems().stream().allMatch(x -> "WAREHOUSE".equals(x.siteType()))), "only warehouses are offered (other tests leave warehouses in the shared database)");
+        fx(() -> returnTo.getSelectionModel().select(returnTo.getItems().stream().filter(x -> x.id().equals(siteA.id())).findFirst().orElseThrow()));
         resetCapture();
         type(all(bTransfers, TextField.class).get(0), "UIE-" + N);
         click(bTransfers, "Add to transfer");

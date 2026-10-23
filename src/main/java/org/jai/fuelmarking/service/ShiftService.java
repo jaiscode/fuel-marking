@@ -19,12 +19,24 @@ public class ShiftService {
         return Tx.call(c -> shifts.findOpen(c, siteId));
     }
 
-    public Shift start(AppUser supervisor, Site site) {
+    /** Starts a shift with no location: only allowed at a site that does not move. */
+    public Shift start(AppUser supervisor, Site site) { return start(supervisor, site, null); }
+
+    /**
+     * Starts a shift. A mobile site moves between places, so it must say where it is working before the shift starts; a fixed site needs not
+     * (it is where it is), but may. The location is one from head office's list, and its name is kept on the shift.
+     */
+    public Shift start(AppUser supervisor, Site site, Location location) {
         Guard.require(supervisor, Role.SUPERVISOR);
+        if (location == null && "MOBILE".equals(site.siteType()))
+            throw new IllegalArgumentException("Choose where " + site.name() + " is working before starting the shift");
         return Tx.call(c -> {
             if (shifts.findOpen(c, site.id()).isPresent())
                 throw new IllegalStateException("A shift is already open at " + site.name());
-            return shifts.insert(c, site.id(), supervisor.id(), containers.openedVolume(c, site.id()));
+            Location chosen = null;
+            if (location != null) chosen = new MasterDataDao().location(c, location.id())
+                    .orElseThrow(() -> new IllegalArgumentException("Unknown location " + location.name() + " - head office may have retired it"));
+            return shifts.insert(c, site.id(), supervisor.id(), containers.openedVolume(c, site.id()), chosen == null ? null : chosen.id(), chosen == null ? null : chosen.name());
         });
     }
 

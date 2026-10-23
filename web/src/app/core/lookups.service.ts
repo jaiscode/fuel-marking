@@ -11,6 +11,7 @@ export class LookupsService {
   readonly fuelTypes = signal<Lookup[]>([]);
   readonly rumTypes = signal<Lookup[]>([]);
   readonly containerTypes = signal<Lookup[]>([]);
+  readonly locations = signal<Lookup[]>([]);
   private loaded = false;
 
   ensureLoaded(): void {
@@ -21,7 +22,7 @@ export class LookupsService {
 
   reload(): void {
     this.api.lookups().subscribe({
-      next: l => { this.sites.set(l.sites); this.omcs.set(l.omcs); this.fuelTypes.set(l.fuelTypes ?? []); this.rumTypes.set(l.rumTypes ?? []); this.containerTypes.set(l.containerTypes ?? []); },
+      next: l => { this.sites.set(l.sites); this.omcs.set(l.omcs); this.fuelTypes.set(l.fuelTypes ?? []); this.rumTypes.set(l.rumTypes ?? []); this.containerTypes.set(l.containerTypes ?? []); this.locations.set(l.locations ?? []); },
       error: () => (this.loaded = false)
     });
   }

@@ -17,6 +17,7 @@ class ShiftTab extends RefreshableTab {
     private final Circle dot = new Circle(6);
     private final TextField notes = new TextField();
     private final Button start = Ui.primary(new Button("Start shift"));
+    private final ComboBox<Location> location = new ComboBox<>();   // where the site is working: required at a mobile site, optional at a fixed one
     private final Button end = new Button("End shift");
     private final Button reconcileNow = new Button("Reconcile stock");   // opens the Reconcile screen
     private final ReconcileService reconcileService = new ReconcileService();
@@ -37,7 +38,7 @@ class ShiftTab extends RefreshableTab {
         notes.setPromptText("Closing notes (optional)");
         start.setOnAction(e -> Ui.attempt(() -> {
             Session s = Session.get();
-            s.setShift(service.start(s.user(), s.site()));
+            s.setShift(service.start(s.user(), s.site(), location.getValue()));
             onShiftChanged.run();
             refresh();
         }));
@@ -50,7 +51,7 @@ class ShiftTab extends RefreshableTab {
         VBox statusText = new VBox(2, status, statusHint);
         Region grow = new Region();
         HBox.setHgrow(grow, Priority.ALWAYS);
-        HBox statusRow = new HBox(14, dot, statusText, grow, start, reconcileNow, end);
+        HBox statusRow = new HBox(14, dot, statusText, grow, location, start, reconcileNow, end);
         statusRow.setAlignment(Pos.CENTER_LEFT);
         statusRow.getStyleClass().add("card");
 
@@ -139,14 +140,22 @@ class ShiftTab extends RefreshableTab {
         Session s = Session.get();
         boolean open = s.shift() != null;
         start.setDisable(open);
+        location.setVisible(!open);
+        location.setManaged(!open);
+        boolean mobile = "MOBILE".equals(s.site().siteType());
+        location.setPromptText(mobile ? "Where are you working? (required)" : "Location (optional)");
+        Location chosen = location.getValue();
+        location.getItems().setAll(org.jai.fuelmarking.config.Tx.<java.util.List<Location>>call(c -> new org.jai.fuelmarking.dao.MasterDataDao().locations(c)));
+        if (chosen != null && location.getItems().contains(chosen)) location.setValue(chosen);
         end.setDisable(true);
         reconcileNow.setDisable(!open);
         checklist.setVisible(open);
         checklist.setManaged(open);
         dot.getStyleClass().setAll("status-dot", open ? "on" : "off");
-        status.setText(open ? "Shift OPEN since " + s.shift().startedAt().toLocalTime().withNano(0) : "No shift open");
+        status.setText(open ? "Shift OPEN since " + s.shift().startedAt().toLocalTime().withNano(0)
+                + (s.shift().locationName() == null ? "" : " at " + s.shift().locationName()) : "No shift open");
         statusHint.setText(open ? "Register, dose and verify trucks. End the shift when the work is done."
-                : "Start a shift to register trucks and open jerricans.");
+                : mobile ? "This is a mobile site: choose where you are working, then start the shift." : "Start a shift to register trucks and open jerricans.");
         reconciliation.setVisible(open);
         reconciliation.setManaged(open);
         if (!open) return;

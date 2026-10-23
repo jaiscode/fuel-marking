@@ -20,6 +20,7 @@ public class MasterDataService {
     public record Omc(UUID id, String code, String name, boolean active) {}
     /** Every fuel type is marked with one rum type; rumTypeCode is looked up (it is what the sites are told). */
     public record FuelType(UUID id, String code, String name, UUID rumTypeId, String rumTypeCode, boolean active) {}
+    public record Location(UUID id, String code, String name, boolean active) {}
     public record RumType(UUID id, String code, String name, String color, boolean active) {}
     /** A jerrican head office has registered; capacityG is grams of rum. */
     public record ContainerType(UUID id, String code, String name, String category, int seals, Double defaultCapacityG, boolean active) {}
@@ -65,6 +66,23 @@ public class MasterDataService {
         return jdbc.query("SELECT f.*, r.code AS rum_type_code FROM fuel_types f LEFT JOIN rum_types r ON r.id = f.rum_type_id ORDER BY f.name", FUEL);
     }
     public List<ContainerType> containerTypes() { return jdbc.query("SELECT * FROM container_types ORDER BY category, name", CONTAINER_TYPE); }
+    public List<Location> locations() {
+        return jdbc.query("SELECT * FROM locations ORDER BY name", (rs, n) -> new Location(rs.getObject("id", UUID.class), rs.getString("code"), rs.getString("name"), rs.getBoolean("active")));
+    }
+
+    @Transactional
+    public Location saveLocation(Location l) {
+        require(l.code(), "code"); require(l.name(), "name");
+        Location saved = new Location(l.id() == null ? UUID.randomUUID() : l.id(), l.code().trim().toUpperCase(), l.name().trim(), l.active());
+        jdbc.update("""
+                INSERT INTO locations(id, code, name, active) VALUES (?,?,?,?)
+                ON CONFLICT (id) DO UPDATE SET code=EXCLUDED.code, name=EXCLUDED.name, active=EXCLUDED.active, updated_at=now()""",
+                saved.id(), saved.code(), saved.name(), saved.active());
+        audit.record(l.id() == null ? "LOCATION_CREATE" : "LOCATION_UPDATE", saved.id().toString(), saved.code() + (saved.active() ? "" : " (inactive)"));
+        outbox.enqueue("LOCATION", saved.id(), saved);
+        return saved;
+    }
+
     public List<RumType> rumTypes() { return jdbc.query("SELECT * FROM rum_types ORDER BY name", RUM); }
     public List<Jerrican> jerricans() { return jdbc.query("SELECT * FROM registered_jerricans ORDER BY barcode", JERRICAN); }
 
@@ -253,8 +271,9 @@ public class MasterDataService {
         jerricans().forEach(j -> outbox.enqueue("JERRICAN", j.id(), jerricanMessage(j,
                 jdbc.queryForObject("SELECT code FROM container_types WHERE id = ?", String.class, j.containerTypeId()),
                 jdbc.queryForObject("SELECT code FROM rum_types WHERE id = ?", String.class, j.rumTypeId()))));
+        locations().forEach(l -> outbox.enqueue("LOCATION", l.id(), l));
         users().forEach(u -> enqueueUser(u.id()));
-        return sites().size() + omcs().size() + fuelTypes().size() + containerTypes().size() + rumTypes().size() + jerricans().size() + users().size();
+        return locations().size() + sites().size() + omcs().size() + fuelTypes().size() + containerTypes().size() + rumTypes().size() + jerricans().size() + users().size();
     }
 
     /** Sets or resets a user's PIN. The hash (never the PIN) is stored and replicated to the sites. */

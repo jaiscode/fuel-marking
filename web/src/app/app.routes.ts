@@ -26,6 +26,7 @@ export const routes: Routes = [
           { path: 'omcs', loadComponent: () => import('./pages/admin/omcs.component').then(m => m.AdminOmcsComponent), title: 'Oil companies' },
           { path: 'fuel-types', data: { kind: 'fuel' }, loadComponent: () => import('./pages/admin/code-list.component').then(m => m.AdminCodeListComponent), title: 'Fuel types' },
           { path: 'container-types', loadComponent: () => import('./pages/admin/container-types.component').then(m => m.AdminContainerTypesComponent), title: 'Container types' },
+          { path: 'locations', data: { kind: 'location' }, loadComponent: () => import('./pages/admin/code-list.component').then(m => m.AdminCodeListComponent), title: 'Locations' },
           { path: 'rum-types', data: { kind: 'rum' }, loadComponent: () => import('./pages/admin/code-list.component').then(m => m.AdminCodeListComponent), title: 'Rum types' },
           { path: 'jerricans', loadComponent: () => import('./pages/admin/jerricans.component').then(m => m.AdminJerricansComponent), title: 'Jerricans' },
           { path: 'users', loadComponent: () => import('./pages/admin/users.component').then(m => m.AdminUsersComponent), title: 'Users' }

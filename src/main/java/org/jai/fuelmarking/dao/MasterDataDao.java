@@ -35,6 +35,22 @@ public class MasterDataDao {
         return out;
     }
 
+    /** The places a mobile site can work, as head office last told us. */
+    public List<Location> locations(Connection c) throws SQLException {
+        List<Location> out = new ArrayList<>();
+        try (Statement s = c.createStatement(); ResultSet rs = s.executeQuery("SELECT id, code, name FROM locations WHERE active ORDER BY name")) {
+            while (rs.next()) out.add(new Location(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3)));
+        }
+        return out;
+    }
+
+    public Optional<Location> location(Connection c, UUID id) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement("SELECT id, code, name FROM locations WHERE active AND id = ?")) {
+            ps.setObject(1, id);
+            try (ResultSet rs = ps.executeQuery()) { return rs.next() ? Optional.of(new Location(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3))) : Optional.empty(); }
+        }
+    }
+
     public List<RumType> rumTypes(Connection c) throws SQLException {
         List<RumType> out = new ArrayList<>();
         try (Statement s = c.createStatement(); ResultSet rs = s.executeQuery("SELECT code, name, color FROM rum_types WHERE active ORDER BY name")) {

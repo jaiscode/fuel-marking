@@ -67,6 +67,14 @@ public class AdminController {
         return service.saveContainerType(new ContainerType(id, t.code(), t.name(), t.category(), t.seals(), t.defaultCapacityG(), t.active()));
     }
 
+    @GetMapping("/locations") List<Location> locations() { return service.locations(); }
+    @PostMapping("/locations") ResponseEntity<Location> createLocation(@RequestBody Location l) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.saveLocation(new Location(null, l.code(), l.name(), true)));
+    }
+    @PutMapping("/locations/{id}") Location updateLocation(@PathVariable UUID id, @RequestBody Location l) {
+        return service.saveLocation(new Location(id, l.code(), l.name(), l.active()));
+    }
+
     @GetMapping("/rum-types") List<RumType> rumTypes() { return service.rumTypes(); }
     @PostMapping("/rum-types") ResponseEntity<RumType> createRumType(@RequestBody RumType r) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.saveRumType(new RumType(null, r.code(), r.name(), r.color(), true)));

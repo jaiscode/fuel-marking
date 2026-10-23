@@ -15,7 +15,7 @@ import { fmt0, fmt1 } from '../shared/format';
     <p><a routerLink="/markings">‹ All markings</a></p>
     @if (d(); as x) {
       <div class="page-head">
-        <div><h1 class="mono">{{ x.marking.orderNumber }}</h1><p>{{ x.marking.truckNumber }}@if (x.marking.trailerNumber) { + {{ x.marking.trailerNumber }} }· {{ x.marking.omc }} · {{ x.marking.siteName }}</p></div>
+        <div><h1 class="mono">{{ x.marking.orderNumber }}</h1><p>{{ x.marking.truckNumber }}@if (x.marking.trailerNumber) { + {{ x.marking.trailerNumber }} }· {{ x.marking.omc }} · {{ x.marking.siteName }}@if (x.marking.location) { at {{ x.marking.location }} }</p></div>
         <app-status-badge [value]="x.marking.status" />
       </div>
 

@@ -1,0 +1,93 @@
+# The desktop app reads THIS file (built into the jar). To change settings without touching the jar, create a file called
+# application-local.yml next to the jar (or point to one with -Dfuelmarking.config=PATH or the FUEL_MARKING_CONFIG variable).
+# It only needs the settings you change, for example:
+#     sync:
+#       enabled: true
+#       site-id: "your-site-id"
+# Treat it like a password file: it may hold secrets. Any single setting can also be overridden without a file:
+#   -Dsome.key=value  or an environment variable (key in upper case, dots and dashes as underscores), e.g. DATABASE_PASSWORD.
+application:
+  name: "Fuel Marking System"
+  version: "1.0.0"
+  description: "JavaFX application for fuel marking operations"
+
+database:
+  url: "jdbc:postgresql://localhost:5432/fuel_marking"
+  username: "postgres"          # override with DATABASE_USERNAME
+  password: ""                  # override with DATABASE_PASSWORD
+  driver-class-name: "org.postgresql.Driver"
+
+  # Connection pool
+  pool:
+    maximum-pool-size: 10
+    minimum-idle: 5
+    connection-timeout: 30000
+    idle-timeout: 600000
+    max-lifetime: 1800000
+    leak-detection-threshold: 60000
+
+  # Additional PostgreSQL settings
+  properties:
+    cache-prep-stmts: true
+    prep-stmt-cache-size: 250
+    prep-stmt-cache-sql-limit: 2048
+    use-server-prep-stmts: true
+
+flyway:
+  locations:
+    - "classpath:db/migration"
+  baseline-on-migrate: true
+  validate-on-migrate: true
+  out-of-order: false
+  clean-disabled: true
+
+# Business rules
+fuel-marking:
+  # Rum dose in GRAMS per 1000 L of declared fuel volume. Agreed: 10 g per 1000 L.
+  rum-dosage-per-1000l: 10.0
+
+  # The dose is weighed on the scale and must be within this percentage of the required dose. Agreed for now: 2%.
+  dose-tolerance-percent: 2.0
+
+  # Validation limits
+  validation:
+    min-declared-volume: 100.0        # litres
+    max-declared-volume: 50000.0
+    min-compartment-capacity: 50.0
+    max-compartment-capacity: 10000.0
+
+  # UI
+  ui:
+    auto-refresh-interval: 30         # seconds
+    show-completed-records: true
+    records-per-page: 50
+    # Sign out after this many seconds without any mouse or keyboard input (shared terminals). 0 disables.
+    idle-lock-seconds: 600
+
+# Synchronisation with the central backend. Disabled until a site id and API key are configured.
+# Secrets can be supplied as environment variables (SYNC_API_KEY) instead of being written here.
+sync:
+  enabled: false
+  site-id: ""            # UUID of this installation's marking site
+  api-key: ""            # issued by the web app (admin) for the site
+  base-url: "http://localhost:8080"
+  interval-seconds: 15
+  kafka:
+    bootstrap-servers: "localhost:9092"
+    master-data-topic: "fuelmarking.master-data"
+    # Extra Kafka client settings for a secured broker, e.g.
+    #   security.protocol: SASL_SSL
+    #   sasl.mechanism: SCRAM-SHA-512
+    #   sasl.jaas.config: org.apache.kafka.common.security.scram.ScramLoginModule required username="site-x" password="...";
+    # Prefer environment variables for secrets: SYNC_KAFKA_PROPERTIES_SASL_JAAS_CONFIG=...
+    properties: {}
+
+# Hardware. The scale is a simulator until the real device is added (docs/hardware.md).
+hardware:
+  scale:
+    driver: simulator          # simulator = in-app simulator with a control window | tcp = device or standalone simulator | serial = real device (to add)
+    simulator-panel: true      # show the simulator's control window when driver is 'simulator'
+    stable-wait-seconds: 5     # how long to wait for a steady reading before giving up
+    tcp:
+      host: localhost
+      port: 5025

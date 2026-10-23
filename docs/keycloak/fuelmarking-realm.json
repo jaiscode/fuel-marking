@@ -1,0 +1,73 @@
+{
+  "realm": "fuelmarking",
+  "displayName": "Fuel Marking",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "bruteForceProtected": true,
+  "failureFactor": 5,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "roles": {
+    "realm": [
+      { "name": "fuelmarking-admin", "description": "Manage sites, oil companies, users, PINs and site API keys; also reads all reports" },
+      { "name": "fuelmarking-viewer", "description": "Read reports" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "fuelmarking-web",
+      "name": "Fuel Marking web app",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8080/",
+        "http://localhost:4200/",
+        "https://CHANGE-ME.example.com/"
+      ],
+      "webOrigins": [
+        "http://localhost:8080",
+        "http://localhost:4200",
+        "https://CHANGE-ME.example.com"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:8080/signed-out##http://localhost:4200/signed-out##https://CHANGE-ME.example.com/signed-out"
+      },
+      "protocolMappers": [
+        {
+          "name": "fuelmarking-api audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "fuelmarking-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "roles (flat)",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "roles",
+            "multivalued": "true",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

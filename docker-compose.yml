@@ -1,0 +1,71 @@
+# Central system for evaluation and small deployments: PostgreSQL + Kafka + backend/web app.
+#   cp .env.example .env   # then edit
+#   docker compose up -d --build
+#
+# NOT production-ready as shipped: Kafka here is PLAINTEXT. Marking sites read master data - including PIN hashes -
+# from Kafka, so before exposing it beyond a trusted network enable TLS + authentication + ACLs (see docs/deployment.md).
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: fuel_central
+      POSTGRES_USER: ${POSTGRES_USER:-fuelmarking}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-fuelmarking} -d fuel_central"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  kafka:
+    image: apache/kafka:3.8.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENERS: INTERNAL://:9092,EXTERNAL://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://${KAFKA_PUBLIC_HOST:-localhost}:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"   # the backend creates the compacted master-data topic itself
+    ports:
+      - "29092:29092"        # for marking sites; restrict/secure this before using it on the internet
+    volumes:
+      - kafkadata:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+    restart: unless-stopped
+
+  backend:
+    build: .
+    depends_on:
+      postgres: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    environment:
+      CENTRAL_DB_URL: jdbc:postgresql://postgres:5432/fuel_central
+      CENTRAL_DB_USER: ${POSTGRES_USER:-fuelmarking}
+      CENTRAL_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      OIDC_ISSUER_URI: ${OIDC_ISSUER_URI:?set OIDC_ISSUER_URI in .env}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-fuelmarking-web}
+      OIDC_ROLES_CLAIM: ${OIDC_ROLES_CLAIM:-roles}
+      OIDC_ADMIN_ROLE: ${OIDC_ADMIN_ROLE:-fuelmarking-admin}
+      OIDC_VIEWER_ROLE: ${OIDC_VIEWER_ROLE:-fuelmarking-viewer}
+    ports:
+      - "8080:8080"          # put a TLS-terminating reverse proxy in front for real use
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  kafkadata:

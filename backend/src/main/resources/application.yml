@@ -1,0 +1,47 @@
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URI:}   # required, e.g. https://keycloak.example.com/realms/fuelmarking
+  datasource:
+    url: ${CENTRAL_DB_URL:jdbc:postgresql://localhost:5432/fuel_central}
+    username: ${CENTRAL_DB_USER:postgres}
+    password: ${CENTRAL_DB_PASSWORD:}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        enable.idempotence: true
+        max.block.ms: 5000        # the outbox retries; a stuck send must not hold the drain for long
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health          # liveness/readiness for orchestrators; nothing else is exposed
+  endpoint:
+    health:
+      show-details: never
+
+server:
+  forward-headers-strategy: framework   # honour X-Forwarded-* when run behind a TLS-terminating proxy
+  shutdown: graceful
+
+fuelmarking:
+  # Compacted topic carrying sites, oil marketing companies and users to every marking site.
+  master-data-topic: fuelmarking.master-data
+  master-data-drain-ms: 1000   # how often queued master data is sent to Kafka
+  auth:
+    # How people sign in to the web app (OIDC authorization code + PKCE). Provider-agnostic: works with Keycloak,
+    # Microsoft Entra ID, Okta, Auth0 ... Create a *public* client with redirect URI https://<host>/ and the same
+    # web origin, and add the two roles below (or map your provider's groups to them via roles-claim).
+    client-id: ${OIDC_CLIENT_ID:fuelmarking-web}
+    scope: ${OIDC_SCOPE:openid profile email}
+    roles-claim: ${OIDC_ROLES_CLAIM:roles}      # Keycloak: realm_access.roles ; Entra ID: roles ; Okta: groups
+    admin-role: ${OIDC_ADMIN_ROLE:fuelmarking-admin}
+    viewer-role: ${OIDC_VIEWER_ROLE:fuelmarking-viewer}
+    audience: ${OIDC_AUDIENCE:}                 # recommended: the API's audience / client id

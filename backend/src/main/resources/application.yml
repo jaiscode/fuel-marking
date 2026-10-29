@@ -15,6 +15,10 @@ spring:
       maximum-pool-size: ${CENTRAL_DB_POOL_SIZE:25}
       minimum-idle: 5
       connection-timeout: ${CENTRAL_DB_CONNECT_TIMEOUT_MS:10000}
+  task:
+    scheduling:
+      pool:
+        size: 2          # the master-data drain (may wait on Kafka) and the transfer sequencer must not block each other
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
@@ -42,6 +46,7 @@ fuelmarking:
   # Compacted topic carrying sites, oil marketing companies and users to every marking site.
   master-data-topic: fuelmarking.master-data
   master-data-drain-ms: 1000   # how often queued master data is sent to Kafka
+  sync-sequencer-ms: 1000      # how often pushed transfers are numbered for pulling (they are pullable after the next run)
   auth:
     # How people sign in to the web app (OIDC authorization code + PKCE). Provider-agnostic: works with Keycloak,
     # Microsoft Entra ID, Okta, Auth0 ... Create a *public* client with redirect URI https://<host>/ and the same

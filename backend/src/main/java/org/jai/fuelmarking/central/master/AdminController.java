@@ -113,7 +113,12 @@ public class AdminController {
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/audit") List<Map<String, Object>> audit(@RequestParam(defaultValue = "100") int limit) { return audit.recent(limit); }
+    /** Newest first. Optional {@code action} filter, e.g. {@code SYNC_CONFLICT} or {@code API_KEY_ISSUED}. */
+    @GetMapping("/audit") List<Map<String, Object>> audit(@RequestParam(defaultValue = "100") int limit,
+                                                         @RequestParam(required = false) String action) {
+        if (action != null && action.length() > 50) throw new IllegalArgumentException("Unknown action");
+        return audit.recent(limit, action);
+    }
 
     /** How many master-data changes are still waiting to be delivered to the sites (non-zero for long = Kafka trouble). */
     @GetMapping("/master-data/status") MasterDataOutbox.Status masterDataStatus() { return outbox.status(); }

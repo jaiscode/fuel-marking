@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Shape checks for pushed documents. The typed SQL views cast these fields, so a malformed value accepted here
@@ -12,6 +13,25 @@ import java.util.UUID;
  */
 final class PayloadChecks {
     private static final int MAX_SIGNATURE_CHARS = 1_500_000;
+    static final int MAX_TRANSFER_ITEMS = 1000;
+    /** Exactly what the desktop signs (SignatureDao.save callers): truck markings, shifts, stock counts and transfers. */
+    static final java.util.Set<String> SIGNED_TYPES = java.util.Set.of("TRUCK_MARKING", "SHIFT", "STOCK_COUNT", "TRANSFER");
+    /** The desktop stores barcodes in VARCHAR(100). */
+    static final int MAX_BARCODE_CHARS = 100;
+    /**
+     * Barcodes are scanned or typed as free text, and a rejected event is never re-sent by the desktop (it is parked as
+     * refused), so be generous: any letter, mark, digit, punctuation, symbol or space character (including a pasted
+     * no-break space), plus the GS1 group separator U+001D that scanners emit. Still refused: every other control
+     * character, formatting characters (bidi overrides, zero-width) and line/paragraph separators. Never normalised:
+     * central's copy must match the site's byte for byte.
+     */
+    private static final Pattern BARCODE = Pattern.compile("[\\p{L}\\p{M}\\p{N}\\p{P}\\p{S}\\p{Zs}\\x{1D}]+");
+    /**
+     * What a PostgreSQL {@code timestamp} (and the typed report views that cast these fields) can hold. Wider than any
+     * plausible date on purpose: a site whose clock reset to 1970 must not lose its records for good. Years 0000 and below,
+     * and five-digit years, parse in Java but not in PostgreSQL.
+     */
+    static final int MIN_YEAR = 1, MAX_YEAR = 9999;
 
     private PayloadChecks() {}
 
@@ -41,7 +61,7 @@ final class PayloadChecks {
                 }
                 case "CONTAINER" -> {
                     sameId(entityId, uuid(p, "id", true));
-                    uuid(p, "siteId", true); text(p, "barcode"); text(p, "type"); text(p, "status");
+                    uuid(p, "siteId", true); barcode(p, "barcode"); text(p, "type"); text(p, "status");
                     number(p, "capacityMl", true); number(p, "currentVolumeMl", true);
                 }
                 case "STOCK_COUNT" -> {
@@ -52,12 +72,13 @@ final class PayloadChecks {
                     if (!lines.isArray() || lines.isEmpty()) return "lines must be a non-empty array";
                     for (JsonNode l : lines) {
                         if (!l.isObject()) return "line must be an object";
-                        text(l, "barcode"); number(l, "systemG", true); number(l, "countedG", true); number(l, "varianceG", true);
+                        barcode(l, "barcode"); number(l, "systemG", true); number(l, "countedG", true); number(l, "varianceG", true);
                     }
                 }
                 case "SIGNATURE" -> {
                     sameId(entityId, uuid(p, "id", true));
-                    uuid(p, "entityId", true); uuid(p, "signedBy", true); text(p, "entityType"); text(p, "step");
+                    uuid(p, "entityId", true); uuid(p, "signedBy", true); text(p, "step");
+                    if (!SIGNED_TYPES.contains(text(p, "entityType"))) throw new IllegalArgumentException("Bad entityType (not something a site signs)");
                     String png = text(p, "signaturePng");
                     if (png.length() > MAX_SIGNATURE_CHARS) return "Signature image too large";
                     Base64.getDecoder().decode(png);
@@ -68,9 +89,10 @@ final class PayloadChecks {
                     uuid(t, "fromSiteId", true); uuid(t, "toSiteId", true); text(t, "status"); time(t, "dispatchedAt", true);
                     JsonNode items = p.path("items");
                     if (!items.isArray()) return "items must be an array";
+                    if (items.size() > MAX_TRANSFER_ITEMS) return "At most " + MAX_TRANSFER_ITEMS + " items per transfer";
                     for (JsonNode i : items) {
                         if (!i.isObject()) return "item must be an object";
-                        text(i, "barcode");
+                        barcode(i, "barcode");
                     }
                 }
                 default -> { }
@@ -98,8 +120,27 @@ final class PayloadChecks {
             if (required) throw new IllegalArgumentException("Missing " + f);
             return null;
         }
-        try { return UUID.fromString(n.asText()); }
+        UUID id;
+        try { id = UUID.fromString(n.asText()); }
         catch (IllegalArgumentException e) { throw new IllegalArgumentException("Bad " + f); }
+        // ids are compared as text (site ownership, transfer ends), so only the canonical lower-case form is accepted
+        if (!id.toString().equals(n.asText())) throw new IllegalArgumentException("Bad " + f + " (not a canonical lower-case UUID)");
+        return id;
+    }
+
+    private static void barcode(JsonNode p, String f) {
+        String b = text(p, f);
+        if (b.length() > MAX_BARCODE_CHARS) throw new IllegalArgumentException(f + " longer than " + MAX_BARCODE_CHARS + " characters");
+        if (!BARCODE.matcher(b).matches()) throw new IllegalArgumentException(f + " contains control or invisible characters");
+    }
+
+    /** A LocalDateTime PostgreSQL can store; the reason if not, otherwise null. */
+    static String timestamp(String value) {
+        LocalDateTime t;
+        try { t = LocalDateTime.parse(value); }
+        catch (RuntimeException e) { return "unparseable"; }
+        if (t.getYear() < MIN_YEAR || t.getYear() > MAX_YEAR) return "year must be between " + MIN_YEAR + " and " + MAX_YEAR;
+        return null;
     }
 
     private static String text(JsonNode p, String f) {
@@ -123,7 +164,7 @@ final class PayloadChecks {
             if (required) throw new IllegalArgumentException("Missing " + f);
             return;
         }
-        try { LocalDateTime.parse(n.asText()); }
-        catch (RuntimeException e) { throw new IllegalArgumentException("Bad " + f); }
+        String problem = timestamp(n.asText());
+        if (problem != null) throw new IllegalArgumentException("Bad " + f + " (" + problem + ")");
     }
 }

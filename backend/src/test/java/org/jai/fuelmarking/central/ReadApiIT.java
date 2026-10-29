@@ -19,11 +19,11 @@ import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Pushes payloads captured from the real desktop app, then reads them back through the typed read API. */
+@org.springframework.test.context.TestPropertySource(locations = "classpath:it-database.properties")   // the shared test database settings
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}",
-        "spring.datasource.url=jdbc:postgresql://localhost:55432/fuel_central_test",
-        "spring.datasource.password=x",
         "fuelmarking.master-data-drain-enabled=false",   // only the suites that test delivery drain the shared outbox
+        "fuelmarking.sync-sequencer-enabled=false",      // this context stays cached; a background run would race the sync suites' explicit numbering
         "fuelmarking.auth.audience=fuelmarking-api"})
 @EmbeddedKafka(partitions = 1)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)

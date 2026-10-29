@@ -34,6 +34,68 @@ Flyway creates the schema on first start. `GET /actuator/health` is the readines
 | `OIDC_*` | see [oidc-setup.md](oidc-setup.md) | Sign-in for the web app. `OIDC_ISSUER_URI` is required |
 | `fuelmarking.master-data-topic` | `fuelmarking.master-data` | Compacted, single-partition topic (created automatically) |
 | `fuelmarking.master-data-replicas` | `1` | Set to 3 on a real cluster |
+| `fuelmarking.sync-sequencer-ms` | `1000` | How often pushed transfers are numbered for pulling; a transfer reaches the other site at its first pull after that |
+
+### Upgrading the central backend
+* **To the release with migration V18 (transfers numbered after commit): stop every running backend instance first**, then
+  start the new version (Flyway migrates on start-up). An older instance still running against the migrated database would
+  number transfers while pushing again - the race this release fixes, which can silently lose transfers for the receiving
+  site. Desktops need no change and keep their pull cursors.
+* V18 builds indexes on `synced_entities` without `CONCURRENTLY`: writes to that table wait until they are built (seconds on
+  a typical database, longer with millions of rows). Sites simply retry; plan the upgrade for a quiet moment.
+* After the upgrade a pushed transfer is pulled by the other site after the next numbering run (`fuelmarking.sync-sequencer-ms`).
+* The same release tightens what sites may push; refused records are parked on the site (see "A rejected record" below):
+  a push that changes a transfer's two sites, or touches a transfer between two other sites, is refused ("Transfer parties
+  cannot change" / "Transfer belongs to other sites"); dates must lie in years 1-9999; barcodes may be at most 100
+  characters and must not contain control or invisible formatting characters (spaces of any kind and the GS1 group
+  separator are fine); a transfer may list at most 1000 containers; ids must be lower-case UUIDs (as the desktop sends them).
+* Records now belong to the site that first stored them. Containers and transfers are shared (custody changes hands;
+  a transfer's two sites never change); every other record - shifts, truck markings, incidents, stock counts, signatures -
+  can only be updated by the site that stored it, and a signature never changes once stored. New refusals:
+  "Record belongs to another site", "Signature is for another site's record" (a site may sign only its own records, or a
+  transfer it is one of the two sites of), "Signatures cannot be changed", and "Bad entityType" for a signature of
+  anything other than a truck marking, shift, stock count or transfer.
+  **Before upgrading, look for rows another site has already taken over.** The new rules lock each row to whoever stored
+  it last before the upgrade, so investigate (and if needed restore from the original site's database) anything these
+  return. A takeover always rewrote the payload's `siteId` too, so a row cannot be caught by comparing those two; these
+  queries instead follow the links between records, and each should return no rows:
+  ```sql
+  -- truck markings, incidents and stock counts whose shift was stored by a different site
+  SELECT m.entity_type, m.entity_id, m.source_site_id AS row_site, s.source_site_id AS shift_site
+  FROM synced_entities m
+  JOIN synced_entities s ON s.entity_type = 'SHIFT' AND s.entity_id = m.payload ->> 'shiftId'
+  WHERE m.entity_type IN ('TRUCK_MARKING', 'INCIDENT', 'STOCK_COUNT') AND m.source_site_id <> s.source_site_id;
+  -- stock counts whose lines point at an incident stored by a different site
+  SELECT c.entity_id AS stock_count, c.source_site_id AS row_site, i.entity_id AS incident, i.source_site_id AS incident_site
+  FROM synced_entities c
+  CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(c.payload -> 'lines') = 'array' THEN c.payload -> 'lines' ELSE '[]' END) l
+  JOIN synced_entities i ON i.entity_type = 'INCIDENT' AND i.entity_id = l ->> 'incidentId'
+  WHERE c.entity_type = 'STOCK_COUNT' AND c.source_site_id <> i.source_site_id;
+  -- records signed off by a person who belongs to a different site (a lead, not proof: people can move between sites)
+  SELECT r.entity_type, r.entity_id, r.source_site_id AS row_site, u.site_id AS person_site
+  FROM synced_entities r
+  JOIN app_users u ON u.id::text = COALESCE(r.payload ->> 'supervisorId', r.payload ->> 'reportedBy',
+                                            r.payload ->> 'countedBy', r.payload ->> 'signedBy')
+  WHERE r.entity_type IN ('SHIFT', 'INCIDENT', 'STOCK_COUNT', 'SIGNATURE') AND u.site_id IS NOT NULL AND u.site_id <> r.source_site_id;
+  -- signatures stored by a site that does not own the signed record (or is not one of a transfer's two sites)
+  SELECT s.entity_id AS signature, s.source_site_id, s.payload ->> 'entityType' AS signed_type, s.payload ->> 'entityId' AS signed_id
+  FROM synced_entities s
+  JOIN synced_entities r ON r.entity_type = s.payload ->> 'entityType' AND r.entity_id = s.payload ->> 'entityId'
+  WHERE s.entity_type = 'SIGNATURE'
+    AND CASE WHEN r.entity_type = 'TRANSFER'
+             THEN s.source_site_id::text NOT IN (r.payload -> 'transfer' ->> 'fromSiteId', r.payload -> 'transfer' ->> 'toSiteId')
+             ELSE s.source_site_id <> r.source_site_id END;
+  ```
+  These only find takeovers that left a trace in a linked record. A takeover of a record nothing else points at (for
+  example a shift with no markings, incidents, counts or signatures yet) cannot be found from central data alone. The
+  conclusive check is per site: export the ids of the site's own records from its desktop database (`truck_markings`,
+  `shifts`, `incidents`, `stock_counts`, `signatures`) and confirm `synced_entities.source_site_id` is that site for each.
+* Development and test databases only: a database that ran a pre-release build of this change applied an earlier draft of
+  V18, and Flyway will refuse to start (checksum mismatch). Recreate it, or drop the draft objects and let V18 run again:
+  `DROP INDEX IF EXISTS idx_synced_entities_unnumbered, idx_synced_transfers_unnumbered, idx_synced_transfers_items,
+  idx_audit_log_sync_conflict, idx_audit_log_action, uq_audit_log_dedupe_key; ALTER TABLE audit_log DROP COLUMN IF EXISTS
+  dedupe_key; DELETE FROM flyway_schema_history WHERE version = '18';` (`flyway repair` alone is not enough: the final V18
+  adds objects the drafts did not).
 
 ### Kafka security: required before real use
 Marking sites read **all master data, including users' PIN hashes**, from Kafka, and sites reach it over networks you do not
@@ -98,7 +160,10 @@ A site machine that was offline simply catches up on its next connection; nothin
 * **Reset a PIN / unlock a user**: Users → Set PIN. A new PIN also clears a lockout. Five wrong PINs lock a user for 5 minutes.
 * **Master data not reaching sites**: check Sites for the backlog banner and `GET /api/admin/master-data/status`.
   After a Kafka topic loss use **Re-send master data**.
-* **Audit**: `GET /api/admin/audit` lists master-data changes with who made them.
+* **Audit**: `GET /api/admin/audit` lists master-data changes with who made them. Add `?action=SYNC_CONFLICT` to see custody
+  conflicts: a site dispatched a container that is already in another site's open transfer, or that central records at
+  another site. Such pushes are accepted (sites work offline); the entry names the transfers and sites so head office can
+  sort it out. Other actions can be filtered the same way (e.g. `?action=API_KEY_ISSUED`).
 
 ## 5. Not covered
 * **Hardware**: the barcode scanner works as a keyboard device and signatures are drawn on screen. The **scale is a

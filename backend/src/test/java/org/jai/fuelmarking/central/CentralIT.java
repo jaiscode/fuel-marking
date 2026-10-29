@@ -20,11 +20,11 @@ import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@org.springframework.test.context.TestPropertySource(locations = "classpath:it-database.properties")   // the shared test database settings
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}",
-        "spring.datasource.url=jdbc:postgresql://localhost:55432/fuel_central_test",
-        "spring.datasource.password=x",
         "fuelmarking.master-data-drain-ms=200",
+        "fuelmarking.sync-sequencer-enabled=false",   // numbered explicitly before each pull, see settle()
         "fuelmarking.auth.audience=fuelmarking-api"})
 @EmbeddedKafka(partitions = 1)
 @org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS) // stop its background drain when done
@@ -43,6 +43,18 @@ class CentralIT {
     @Autowired ObjectMapper mapper;
     @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
     @Autowired EmbeddedKafkaBroker broker;
+    @Autowired org.jai.fuelmarking.central.sync.SyncSequencer sequencer;
+
+    /** Pushed rows are numbered after commit; number everything committed so far (another test context may be numbering too). */
+    void settle() {
+        long end = System.currentTimeMillis() + 10_000;
+        while (sequencer.sequence() > 0 || jdbc.queryForObject("SELECT count(*) FROM synced_entities WHERE entity_type = 'TRANSFER' AND seq IS NULL", Long.class) > 0)
+            assertTrue(System.currentTimeMillis() < end, "rows left unnumbered");
+    }
+
+    long conflicts(String barcode) {
+        return jdbc.queryForObject("SELECT count(*) FROM audit_log WHERE action = 'SYNC_CONFLICT' AND target = ?", Long.class, barcode);
+    }
 
     HttpHeaders admin() {
         HttpHeaders h = new HttpHeaders();
@@ -172,6 +184,7 @@ class CentralIT {
         assertEquals(2, r.get("acked").size());
         assertEquals(1, r.get("rejected").size());
 
+        settle();
         JsonNode pulled = call(HttpMethod.GET, "/api/sync/pull?cursor=0", site(siteId, siteKey), null, 200);
         assertEquals(1, pulled.get("transfers").size());
         assertEquals(tid, pulled.get("transfers").get(0).path("transfer").path("id").asText());
@@ -189,9 +202,11 @@ class CentralIT {
                 "transfer", Map.of("id", tid, "fromSiteId", whId.toString(), "toSiteId", siteId.toString(), "status", "RECEIVED", "dispatchedAt", "2026-10-14T10:00:00"),
                 "items", List.of(Map.of("barcode", "J2-" + N, "received", true)));
         call(HttpMethod.POST, "/api/sync/push", site(siteId, siteKey), Map.of("events", List.of(event(1, "TRANSFER", tid, received))), 200);
+        settle();
         JsonNode back = call(HttpMethod.GET, "/api/sync/pull?cursor=0", site(whId, whKey), null, 200);
         assertEquals(1, back.get("transfers").size());
         assertEquals("RECEIVED", back.get("transfers").get(0).path("transfer").path("status").asText());
+        assertEquals(0, conflicts("J2-" + N), "the normal supply flow is not a custody conflict");
     }
 
     @Test @Order(5)

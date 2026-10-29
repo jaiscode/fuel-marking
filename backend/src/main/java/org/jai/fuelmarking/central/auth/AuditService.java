@@ -24,8 +24,31 @@ public class AuditService {
                 actorName(), actorSubject(), action, target, detail);
     }
 
-    public List<Map<String, Object>> recent(int limit) {
-        return jdbc.queryForList("SELECT id, at, actor, action, target, detail FROM audit_log ORDER BY id DESC LIMIT ?", Math.max(1, Math.min(limit, 500)));
+    /** For a non-person actor with no sign-in, e.g. {@code "site <uuid>"} for a site's sync push. Never put secrets in {@code detail}. */
+    public void recordAs(String actor, String action, String target, String detail) {
+        jdbc.update("INSERT INTO audit_log(actor, actor_subject, action, target, detail) VALUES (?,?,?,?,?)",
+                actor, actor, action, target, detail);
+    }
+
+    /**
+     * Records once per {@code dedupeKey} (a partial unique index); returns false when an entry with that key already exists.
+     * Never put secrets in {@code detail} or the key.
+     */
+    public boolean recordOnce(String actor, String action, String target, String detail, String dedupeKey) {
+        return jdbc.update("""
+                INSERT INTO audit_log(actor, actor_subject, action, target, detail, dedupe_key) VALUES (?,?,?,?,?,?)
+                ON CONFLICT (dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING""",
+                actor, actor, action, target, detail, dedupeKey) > 0;
+    }
+
+    public List<Map<String, Object>> recent(int limit) { return recent(limit, null); }
+
+    /** Newest first; {@code action} (optional) keeps only that action, e.g. so master-data changes are not buried by SYNC_CONFLICT rows. */
+    public List<Map<String, Object>> recent(int limit, String action) {
+        int n = Math.max(1, Math.min(limit, 500));
+        if (action == null || action.isBlank())
+            return jdbc.queryForList("SELECT id, at, actor, action, target, detail FROM audit_log ORDER BY id DESC LIMIT ?", n);
+        return jdbc.queryForList("SELECT id, at, actor, action, target, detail FROM audit_log WHERE action = ? ORDER BY id DESC LIMIT ?", action, n);
     }
 
     private static String actorName() {

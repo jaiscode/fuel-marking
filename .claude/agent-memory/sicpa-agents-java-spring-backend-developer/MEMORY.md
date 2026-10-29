@@ -1,0 +1,1 @@
+- [Backend IT environment](backend_it_environment.md) — throwaway PG16 on 55432 + Java 21 for backend ITs; seq-after-commit and accept-then-flag decisions

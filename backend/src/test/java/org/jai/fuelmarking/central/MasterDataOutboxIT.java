@@ -24,10 +24,9 @@ import java.util.concurrent.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /** The master-data outbox with a controllable stand-in for the Kafka connection. */
+@org.springframework.test.context.TestPropertySource(locations = "classpath:it-database.properties")   // the shared test database settings
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}",
-        "spring.datasource.url=jdbc:postgresql://localhost:55432/fuel_central_test",
-        "spring.datasource.password=x",
         "fuelmarking.master-data-drain-ms=150",
         "fuelmarking.auth.audience=fuelmarking-api"})
 @EmbeddedKafka(partitions = 1)

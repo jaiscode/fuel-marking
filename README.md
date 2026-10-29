@@ -58,3 +58,18 @@ For the central system see [docs/deployment.md](docs/deployment.md) (Docker Comp
 | `KEYCLOAK_HOME=... scripts/e2e-keycloak.sh` | The web app's sign-in against a real Keycloak: PKCE, roles, audience, silent token renewal, sign-out (see [docs/oidc-setup.md](docs/oidc-setup.md)) |
 
 `*IT` classes are skipped by a plain `mvn test`; name them with `-Dtest` as above.
+
+The backend's integration tests all use one PostgreSQL database, set in `backend/src/test/resources/it-database.properties`:
+by default `jdbc:postgresql://localhost:55432/fuel_central_test` as user `postgres` with no password. Start a throwaway
+cluster for them with trust authentication (data in a temporary directory; never the development data in `.dev`):
+
+```bash
+initdb -D /tmp/fuel-it -U postgres --auth=trust
+pg_ctl -D /tmp/fuel-it -o "-p 55432 -c listen_addresses=127.0.0.1" -l /tmp/fuel-it.log start
+createdb -h 127.0.0.1 -p 55432 -U postgres fuel_central_test
+cd backend && mvn test -Dtest='*IT,*Test'
+pg_ctl -D /tmp/fuel-it stop
+```
+
+To use another database, set `IT_DB_URL`, `IT_DB_USER` and `IT_DB_PASSWORD` (empty by default; keep passwords out of the
+repository). The backend needs Java 21.
